@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.Windows.Forms
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
@@ -14,6 +14,10 @@ Public Class NSListView
     Public Class NSListViewCollection
         Inherits List(Of NSListViewItem)
         Private Parent As NSListView
+        Private Sub Updated()
+            Parent.InvalidateScroll()
+        End Sub
+
         Public Sub New(Parent As NSListView)
             Me.Parent = Parent
         End Sub
@@ -22,7 +26,7 @@ Public Class NSListView
             If Me.Parent.SmallImageList IsNot Nothing Then
                 Item.ImageList_ = Me.Parent.SmallImageList
             End If
-            MyBase.Add(Item)
+            DoAdd(Item)
             Parent.InvalidateScroll()
         End Sub
 
@@ -32,7 +36,7 @@ Public Class NSListView
             If Me.Parent.SmallImageList IsNot Nothing Then
                 TempAdd.ImageList_ = Me.Parent.SmallImageList
             End If
-            MyBase.Add(TempAdd)
+            DoAdd(TempAdd)
             Parent.InvalidateScroll()
         End Sub
 
@@ -44,7 +48,7 @@ Public Class NSListView
                 SubTempAdd.Text = SubItem
                 TempAdd.SubItems.Add(SubTempAdd)
             Next
-            MyBase.Add(TempAdd)
+            DoAdd(TempAdd)
             Parent.InvalidateScroll()
         End Sub
 
@@ -57,7 +61,7 @@ Public Class NSListView
                     TempAdd.ImageIndex = ImageIndex
                 End If
             End If
-            MyBase.Add(TempAdd)
+            DoAdd(TempAdd)
             Parent.InvalidateScroll()
         End Sub
 
@@ -75,45 +79,65 @@ Public Class NSListView
                 SubTempAdd.Text = SubItem
                 TempAdd.SubItems.Add(SubTempAdd)
             Next
-            MyBase.Add(TempAdd)
+            DoAdd(TempAdd)
             Parent.InvalidateScroll()
+        End Sub
+        Public Shadows Sub AddRange(Range As List(Of NSListViewItem))
+            For Each NSListViewItem In Range
+                If Me.Parent.SmallImageList IsNot Nothing Then
+                    NSListViewItem.ImageList_ = Me.Parent.SmallImageList
+                End If
+                DoAdd(NSListViewItem)
+            Next
+            Parent.InvalidateScroll()
+        End Sub
+
+        Private Sub DoAdd(i As NSListViewItem)
+            MyBase.Add(i)
+            AddHandler i.Updated, AddressOf Updated
         End Sub
 #End Region
-        Public Shadows Sub AddRange(Range As List(Of NSListViewItem))
-            If Me.Parent.SmallImageList IsNot Nothing Then
-                For Each NSListViewItem In Range
-                    NSListViewItem.ImageList_ = Me.Parent.SmallImageList
-                Next
-            End If
-            MyBase.AddRange(Range)
-            Parent.InvalidateScroll()
-        End Sub
         Public Shadows Sub Clear()
-            MyBase.Clear()
+            For Each i In Me
+                RemoveHandler i.Updated, AddressOf Updated
+                MyBase.Remove(i)
+            Next
             Parent.InvalidateScroll()
         End Sub
-        Public Shadows Sub Remove(Item As NSListViewItem)
-            MyBase.Remove(Item)
+        Public Shadows Sub Remove(i As NSListViewItem)
+            DoRemove(i)
             Parent.InvalidateScroll()
         End Sub
-        Public Shadows Sub RemoveAt(Index As Integer)
-            MyBase.RemoveAt(Index)
+        Public Shadows Sub RemoveAt(i As Integer)
+            DoRemove(Me.Item(i))
             Parent.InvalidateScroll()
         End Sub
         Public Shadows Sub RemoveAll(Predicate As System.Predicate(Of NSListViewItem))
-            MyBase.RemoveAll(Predicate)
+            Throw New NotImplementedException
+            'MyBase.RemoveAll(Predicate)
+            'Parent.InvalidateScroll()
+        End Sub
+        ''I will look into this later.
+        Public Shadows Sub RemoveRange(Index As Integer, Count As Integer)
+            For i As Integer = Index To Index + Count Step 1
+                DoRemove(Me.Item(i))
+            Next
             Parent.InvalidateScroll()
         End Sub
-        Public Shadows Sub RemoveRange(Index As Integer, Count As Integer)
-            MyBase.RemoveRange(Index, Count)
-            Parent.InvalidateScroll()
+        Private Sub DoRemove(i As NSListViewItem)
+            RemoveHandler i.Updated, AddressOf Updated
+            MyBase.Remove(i)
         End Sub
     End Class
 
     Public Class NSListViewItem
+        Friend Event Updated()
         'Private Fields
         Private ImageKey_ As String = String.Empty
         Private ImageIndex_ As Integer = -1
+        Private Checked_ As Boolean
+        Private Text_ As String
+        Private SubItems_ As New NSListViewSubItemCollection
         'Friend Fields
         Friend ImageList_ As ImageList
         Friend Checkbox As New NSCheckBox
@@ -125,6 +149,14 @@ Public Class NSListView
             End Get
         End Property
         Public Property Checked As Boolean
+            Get
+                Return Checked_
+            End Get
+            Set(value As Boolean)
+                Checked_ = value
+                RaiseEvent Updated()
+            End Set
+        End Property
         <TypeConverterAttribute(GetType(ImageKeyConverter))> _
         Public Property ImageKey As String
             Get
@@ -135,6 +167,7 @@ Public Class NSListView
                     ImageIndex = -1
                 End If
                 ImageKey_ = value
+                RaiseEvent Updated()
             End Set
         End Property
         <TypeConverterAttribute(GetType(ImageIndexConverter))> _
@@ -147,11 +180,28 @@ Public Class NSListView
                     ImageKey_ = String.Empty
                 End If
                 ImageIndex_ = value
+                RaiseEvent Updated()
             End Set
         End Property
         Property Text As String
+            Get
+                Return Text_
+            End Get
+            Set(value As String)
+                Text_ = value
+                RaiseEvent Updated()
+            End Set
+        End Property
         <DesignerSerializationVisibility(DesignerSerializationVisibility.Content)> _
-        Property SubItems As New NSListViewSubItemCollection()
+        Property SubItems As NSListViewSubItemCollection
+            Get
+                Return SubItems_
+            End Get
+            Set(value As NSListViewSubItemCollection)
+                SubItems_ = value
+                RaiseEvent Updated()
+            End Set
+        End Property
 
         Protected UniqueId As Guid
 
